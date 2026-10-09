@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdn.sheetjs.com 'sha256-fq8QyUfh/M2u0lK2fD4pDeQfS/BhkwS43Ut0OjZybh8=' 'sha256-Fi3He56JUXis5HRnFfbPbDdKzzUr0dBLs5e7KAilT/Y='; style-src 'sha256-aqHz0xNW0Yj1fAHs284tdYo2Envjw+EJFhQVH0cgtao='; img-src 'none'; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Semáforo de Vulnerabilidades</title>
+<style>
+/* ===== Tema (claro / oscuro) ===== */
+:root {
+  --bg: #f4f6f9; --panel: #ffffff; --text: #1d2330; --muted: #5d6677; --border: #dde2ea;
+  --rojo: #d92d20; --rojo-bg: #fde8e7; --amarillo: #b98900; --amarillo-bg: #fff5d6;
+  --verde: #1a7f37; --verde-bg: #e3f5e8; --gris: #6b7280; --gris-bg: #eef0f3;
+  --acento: #2457c5; --sombra: 0 1px 3px rgba(16, 24, 40, .08);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151c; --panel: #1b1f29; --text: #e6e9ef; --muted: #9aa3b2; --border: #2c3240;
+    --rojo: #ff6b5f; --rojo-bg: #3a1d1b; --amarillo: #f2c14e; --amarillo-bg: #3a3118;
+    --verde: #4cc26b; --verde-bg: #183222; --gris: #9aa3b2; --gris-bg: #262b36;
+    --acento: #7aa2ff; --sombra: none;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.45 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); }
+header { padding: 20px 24px 8px; }
+header h1 { margin: 0; font-size: 22px; }
+header p { margin: 4px 0 0; color: var(--muted); }
+main { padding: 8px 24px 32px; max-width: 1500px; margin: 0 auto; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; box-shadow: var(--sombra); margin-bottom: 16px; }
+h2 { font-size: 16px; margin: 0 0 12px; }
+
+/* ===== Carga ===== */
+#zona { display: block; width: 100%; font: inherit; color: var(--text); background: transparent; border: 2px dashed var(--border); border-radius: 10px; padding: 22px; text-align: center; cursor: pointer; }
+#zona.activa { border-color: var(--acento); background: var(--gris-bg); }
+#zona strong { color: var(--acento); }
+.fila-carga { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 12px; color: var(--muted); }
+.fila-carga label { display: flex; gap: 6px; align-items: center; }
+#mensajes > div { padding: 8px 12px; border-radius: 8px; margin-top: 8px; }
+.error { background: var(--rojo-bg); color: var(--rojo); }
+.aviso { background: var(--amarillo-bg); color: var(--text); }
+.ok { background: var(--verde-bg); color: var(--text); }
+
+/* ===== Tarjetas del semáforo ===== */
+.tarjetas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+.tarjeta { border-radius: 12px; padding: 14px 16px; border: 2px solid transparent; cursor: pointer; text-align: left; font: inherit; color: var(--text); }
+.tarjeta .num { font-size: 40px; font-weight: 700; line-height: 1.1; }
+.tarjeta .tit { font-weight: 600; font-size: 15px; }
+.tarjeta .sub { color: var(--muted); font-size: 12px; }
+.tarjeta[aria-pressed="false"] { opacity: .45; }
+.t-rojo { background: var(--rojo-bg); border-color: var(--rojo); } .t-rojo .num { color: var(--rojo); }
+.t-amarillo { background: var(--amarillo-bg); border-color: var(--amarillo); } .t-amarillo .num { color: var(--amarillo); }
+.t-verde { background: var(--verde-bg); border-color: var(--verde); } .t-verde .num { color: var(--verde); }
+.t-gris { background: var(--gris-bg); border-color: var(--gris); } .t-gris .num { color: var(--gris); }
+.indicadores { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.indicador { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.indicador .num { font-size: 24px; font-weight: 700; }
+.indicador .sub { color: var(--muted); font-size: 12px; }
+.pastillas { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.pastilla { background: var(--gris-bg); border-radius: 999px; padding: 2px 9px; font-size: 12px; }
+
+/* ===== Leyenda y gráfico ===== */
+.dos-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.separado { margin-top: 16px; }
+.leyenda li { margin-bottom: 6px; } .leyenda ul { padding-left: 0; list-style: none; margin: 0; }
+.barra-fila { display: grid; grid-template-columns: 200px 1fr 36px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.barra-fila .nombre { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barra { display: flex; height: 20px; border-radius: 5px; overflow: hidden; background: var(--gris-bg); }
+.barra span { display: block; height: 100%; }
+.s-rojo { background: var(--rojo); } .s-amarillo { background: var(--amarillo); } .s-verde { background: var(--verde); } .s-gris { background: var(--gris); }
+.total-barra { font-size: 12px; color: var(--muted); text-align: right; }
+
+/* ===== Filtros y tabla ===== */
+.filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 12px; }
+.filtros label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 3px; }
+select, input[type=search], input[type=date], button { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); }
+input[type=search] { min-width: 240px; }
+button.principal { background: var(--acento); color: #fff; border-color: var(--acento); cursor: pointer; }
+.tabla-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { text-align: left; color: var(--muted); font-weight: 600; border-bottom: 2px solid var(--border); padding: 8px 6px; white-space: nowrap; }
+td { border-bottom: 1px solid var(--border); padding: 7px 6px; vertical-align: top; }
+tr.fila { cursor: pointer; } tr.fila:hover td { background: var(--gris-bg); }
+tr.detalle td { background: var(--bg); }
+.badge { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; font-size: 12px; white-space: nowrap; }
+.b-rojo { background: var(--rojo); color: #fff; } .b-amarillo { background: var(--amarillo); color: #1d2330; }
+.b-verde { background: var(--verde); color: #fff; } .b-gris { background: var(--gris); color: #fff; }
+.motivo-color { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; max-width: 220px; }
+.sev { font-weight: 600; } .sev-Crítica { color: var(--rojo); } .sev-Alta { color: var(--amarillo); }
+.deducida { color: var(--muted); font-size: 11px; display: block; }
+.vencido { color: var(--rojo); font-weight: 700; }
+.detalle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.historico { white-space: pre-wrap; font-size: 12px; color: var(--muted); margin: 0; }
+.oculto { display: none !important; }
+footer { color: var(--muted); font-size: 12px; text-align: center; padding: 0 24px 24px; }
+
+@media (max-width: 1000px) {
+  .tarjetas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dos-col, .detalle-grid { grid-template-columns: 1fr; }
+  .barra-fila { grid-template-columns: 130px 1fr 30px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Semáforo de Vulnerabilidades de Infraestructura</h1>
+  <p>Priorización por severidad y riesgo de penalidad por plazo de remediación. El archivo se procesa solo en este navegador: no se envía a ningún servidor.</p>
+</header>
+
+<main>
+  <section class="panel">
+    <button type="button" id="zona">
+      Arrastrá aquí <strong>Reporte_Vulnerabilidades_Infra.xlsx</strong> o hacé clic para elegirlo (solo .xlsx, máx. 10 MB)
+    </button>
+    <input type="file" id="archivo" accept=".xlsx" class="oculto" aria-label="Archivo Excel de vulnerabilidades">
+    <div class="fila-carga">
+      <label>Fecha de referencia <input type="date" id="fechaRef"></label>
+      <span id="infoArchivo"></span>
+    </div>
+    <div id="mensajes" aria-live="polite"></div>
+  </section>
+
+  <div id="resultado" class="oculto">
+    <section class="tarjetas" id="tarjetas" aria-label="Totales del semáforo"></section>
+    <section class="indicadores" id="indicadores"></section>
+
+    <div class="dos-col separado">
+      <section class="panel">
+        <h2>Vulnerabilidades por equipo</h2>
+        <div id="grafico"></div>
+      </section>
+      <section class="panel leyenda">
+        <h2>Criterio del semáforo</h2>
+        <ul>
+          <li><span class="badge b-rojo">● Rojo</span> Actuar ya: Rechazada, Resurgente Crítica o Alta, plazo o fecha estimada vencidos, Crítica o Alta que vence en 7 días o menos, o fecha estimada posterior al plazo.</li>
+          <li><span class="badge b-amarillo">▲ Amarillo</span> Atención: Resurgente Media o Baja, Nueva o Abierta Crítica, vence en 30 días o menos, Crítica o Alta sin asignar, o corrección que falló en la validación.</li>
+          <li><span class="badge b-verde">■ Verde</span> Bajo control: el resto de las pendientes, que tienen margen.</li>
+          <li><span class="badge b-gris">○ Gris</span> Fuera de la penalidad: Cerrada, Riesgo aceptado y Cancelado con motivo.</li>
+        </ul>
+        <p class="sub" id="leyendaSla"></p>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>Vulnerabilidades priorizadas</h2>
+      <div class="filtros">
+        <label>Severidad <select id="fSev"></select></label>
+        <label>Estado <select id="fEstado"></select></label>
+        <label>Asignado <select id="fAsignado"></select></label>
+        <label>Buscar <input type="search" id="fTexto" placeholder="Id, nombre, comentario…"></label>
+        <button class="principal" id="exportar">Exportar CSV</button>
+        <span id="contador" class="sub"></span>
+      </div>
+      <div class="tabla-wrap">
+        <table>
+          <thead><tr>
+            <th>Semáforo</th><th>Id</th><th>Nombre</th><th>Severidad</th><th>Estado</th><th>Asignado</th>
+            <th>Fecha estimada</th><th>Vencimiento del SLA</th><th>Días restantes</th><th>Último comentario</th>
+          </tr></thead>
+          <tbody id="cuerpo"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+<footer>Hacé clic en una fila para ver la descripción, el histórico y por qué tiene ese color.</footer>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"
+        integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT"
+        crossorigin="anonymous"></script>
+
+<script id="logica">
+// =====================================================================================
+// CONFIGURACIÓN: reglas de severidad, SLA y umbrales. Ajustar aquí.
+// Las palabras clave se comparan en minúsculas y sin acentos.
+// =====================================================================================
+const CONFIG = {
+  severidad: [
+    { nivel: 'Crítica', claves: ['log4j', 'log4shell', 'regresshion', 'openssh', 'smbv1', 'credenciales por defecto', 'firmware de firewall', 'contrasena debil'] },
+    { nivel: 'Alta',    claves: ['kernel', 'sudo', 'rdp', 'print spooler', 'parches de seguridad de windows', 'parches de windows', 'telnet', 'sin soporte', 'tomcat', 'puerto de base de datos'] },
+    { nivel: 'Media',   claves: ['tls 1.0', 'tls 1.1', 'certificado', 'snmp', 'llmnr', 'netbios'] },
+    { nivel: 'Baja',    claves: ['cabeceras'] }
+  ],
+  severidadPorDefecto: 'Baja',
+  slaDias: { 'Crítica': 7, 'Alta': 30, 'Media': 90, 'Baja': 180 },
+  umbralRojoDias: 7,       // Crítica/Alta que vence en estos días o menos -> Rojo
+  umbralAmarilloDias: 30,  // cualquiera que vence en estos días o menos -> Amarillo
+  ventanaPenalidadDias: 7, // "penalidades probables en los próximos N días"
+  hojaPreferida: 'Vulnerabilidades',
+  columnas: ['Id', 'Nombre', 'Descripción', 'Estado', 'Comentarios', 'Comentarios histórico', 'Asignado', 'Fecha estimada'],
+  maxBytes: 10 * 1024 * 1024
+};
+
+const ESTADOS = ['Nueva', 'Abierta', 'Resurgente', 'Rechazada', 'En análisis', 'En remediación',
+                 'Pendiente validación', 'Cerrada', 'Riesgo aceptado', 'Cancelado'];
+const ESTADOS_INGRESO = ['Nueva', 'Abierta', 'Resurgente', 'Rechazada'];
+const ORDEN_COLOR = { rojo: 0, amarillo: 1, verde: 2, gris: 3 };
+const ORDEN_SEV = { 'Crítica': 0, 'Alta': 1, 'Media': 2, 'Baja': 3 };
+const DIA_MS = 86400000;
+
+const normalizar = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const ESTADO_CANONICO = Object.fromEntries(ESTADOS.map((e) => [normalizar(e), e]));
+
+// Fechas: se trabaja siempre con días UTC (número de días desde 1970) para evitar desfasajes de zona horaria.
+function diaDesdeTexto(t) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(t).trim());
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / DIA_MS : null;
+}
+function diaDesdeCelda(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return Math.floor(v) - 25569;  // número de serie de Excel -> días desde 1970
+  if (v instanceof Date) return Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()) / DIA_MS;
+  return diaDesdeTexto(v);
+}
+const textoDesdeDia = (d) => d === null ? '' : new Date(d * DIA_MS).toISOString().slice(0, 10);
+
+// Fechas "[AAAA-MM-DD]" que aparecen en un texto de comentarios.
+function fechasEnTexto(t) {
+  return [...String(t ?? '').matchAll(/\[(\d{4}-\d{2}-\d{2})\]/g)].map((m) => diaDesdeTexto(m[1])).filter((d) => d !== null);
+}
+const dias = (n) => `${n} ${Math.abs(n) === 1 ? 'día' : 'días'}`;
+const sinFecha =(t) => String(t ?? '').replace(/^\s*\[\d{4}-\d{2}-\d{2}\]\s*/, '').trim();
+
+// Severidad: primero busca en el Nombre y, si no encuentra, en la Descripción.
+function deducirSeveridad(nombre, descripcion) {
+  for (const texto of [normalizar(nombre), normalizar(descripcion)]) {
+    for (const regla of CONFIG.severidad) {
+      const clave = regla.claves.find((c) => texto.includes(c));
+      if (clave) return { severidad: regla.nivel, clave };
+    }
+  }
+  return { severidad: CONFIG.severidadPorDefecto, clave: null };
+}
+
+// Un Cancelado solo se excluye de la penalidad si el comentario trae el motivo del rechazo.
+function tieneMotivo(comentario) {
+  const t = normalizar(sinFecha(comentario)).replace(/^cancelad[oa][.:,\s-]*/, '');
+  return /motivo/.test(normalizar(comentario)) || t.length >= 15;
+}
+
+function evaluarFila(f, hoy, avisos) {
+  const estadoOriginal = String(f['Estado'] ?? '').trim();
+  let estado = ESTADO_CANONICO[normalizar(estadoOriginal)];
+  if (!estado) {
+    avisos.push(`${f.Id}: estado desconocido "${estadoOriginal}", se trata como "Abierta".`);
+    estado = 'Abierta';
+  }
+  const comentario = f['Comentarios'] ?? '';
+  const historico = f['Comentarios histórico'] ?? '';
+  const { severidad, clave } = deducirSeveridad(f['Nombre'], f['Descripción']);
+
+  // Fecha de detección: la más antigua de los comentarios. Si resurgió, el plazo se reinicia desde la
+  // última reincidencia, aunque después haya avanzado a otro estado.
+  const fechas = [...fechasEnTexto(comentario), ...fechasEnTexto(historico)];
+  let deteccion = fechas.length ? Math.min(...fechas) : null;
+  const reincidencias = String(comentario + '\n' + historico).split('\n')
+    .filter((linea) => /vuelve a detectar|resurg|reaparec/.test(normalizar(linea)))
+    .flatMap(fechasEnTexto);
+  if (estado === 'Resurgente' && fechasEnTexto(comentario).length) deteccion = fechasEnTexto(comentario)[0];
+  else if (reincidencias.length) deteccion = Math.max(...reincidencias);
+  const vencSla = deteccion === null ? null : deteccion + CONFIG.slaDias[severidad];
+  const diasRestantes = vencSla === null ? null : vencSla - hoy;
+  const fechaEst = diaDesdeCelda(f['Fecha estimada']);
+
+  let estadoEval = estado;
+  let canceladoSinMotivo = false;
+  if (estado === 'Cancelado' && !tieneMotivo(comentario)) {
+    canceladoSinMotivo = true;
+    estadoEval = 'Rechazada';
+    avisos.push(`${f.Id}: Cancelado sin motivo. No se excluye de la penalidad y se trata como "Rechazada".`);
+  }
+
+  const critAlta = severidad === 'Crítica' || severidad === 'Alta';
+  const sinAsignar = !f['Asignado'] || normalizar(f['Asignado']) === 'sin asignar';
+  // La app no ve los estados anteriores: detecta la corrección fallida por el texto del comentario.
+  const correccionFallida = estadoEval === 'En remediación' &&
+    /sigue detectando|se reabre la remediacion/.test(normalizar(comentario + '\n' + historico));
+
+  let color, motivos = [];
+  if (['Cerrada', 'Riesgo aceptado', 'Cancelado'].includes(estadoEval)) {
+    color = 'gris';
+    motivos.push(estadoEval === 'Cancelado' ? 'Cancelado con motivo: fuera de la penalidad' : `${estadoEval}: fuera de la penalidad`);
+  } else {
+    const rojo = [], amarillo = [];
+    if (estadoEval === 'Rechazada') rojo.push(canceladoSinMotivo ? 'Cancelado sin motivo: se revisa como Rechazada' : 'Rechazada: Seguridad debe volver a revisarla');
+    if (estadoEval === 'Resurgente' && critAlta) rojo.push(`Resurgente ${severidad}: la corrección no se sostuvo`);
+    if (diasRestantes !== null && diasRestantes < 0) rojo.push(`SLA vencido hace ${dias(-diasRestantes)}`);
+    if (fechaEst !== null && fechaEst < hoy) rojo.push('La fecha estimada ya pasó');
+    if (critAlta && diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= CONFIG.umbralRojoDias) rojo.push(`${severidad}: el SLA vence en ${dias(diasRestantes)}`);
+    if (fechaEst !== null && vencSla !== null && fechaEst > vencSla) rojo.push('La fecha estimada es posterior al vencimiento del SLA');
+
+    if (estadoEval === 'Resurgente' && !critAlta) amarillo.push(`Resurgente ${severidad}`);
+    if ((estadoEval === 'Nueva' || estadoEval === 'Abierta') && severidad === 'Crítica') amarillo.push('Crítica sin analizar: asignar ya');
+    if (diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= CONFIG.umbralAmarilloDias) amarillo.push(`El SLA vence en ${dias(diasRestantes)}`);
+    if (critAlta && sinAsignar) amarillo.push(`${severidad} sin asignar`);
+    if (correccionFallida) amarillo.push('La corrección falló en la validación');
+
+    if (rojo.length) { color = 'rojo'; motivos = rojo; }
+    else if (amarillo.length) { color = 'amarillo'; motivos = amarillo; }
+    else { color = 'verde'; motivos = ['Tiene margen dentro del SLA']; }
+  }
+
+  return {
+    id: String(f['Id'] ?? ''), nombre: String(f['Nombre'] ?? ''), descripcion: String(f['Descripción'] ?? ''),
+    estado, estadoOriginal, severidad, claveSeveridad: clave, asignado: String(f['Asignado'] ?? '') || 'Sin asignar',
+    comentario: String(comentario), historico: String(historico),
+    fechaEst, deteccion, vencSla, diasRestantes, color, motivos, canceladoSinMotivo,
+    diaComentario: fechasEnTexto(comentario)[0] ?? null
+  };
+}
+
+// Lee el libro, valida columnas y devuelve las filas evaluadas y ordenadas.
+function procesarLibro(libro, hoy) {
+  const nombreHoja = libro.SheetNames.includes(CONFIG.hojaPreferida) ? CONFIG.hojaPreferida : libro.SheetNames[0];
+  const hoja = libro.Sheets[nombreHoja];
+  const filas = XLSX.utils.sheet_to_json(hoja, { defval: null, raw: true });
+  const encabezados = (XLSX.utils.sheet_to_json(hoja, { header: 1, range: 0, defval: null })[0] || []).map((h) => String(h ?? '').trim());
+  const faltantes = CONFIG.columnas.filter((c) => !encabezados.includes(c));
+  if (faltantes.length) throw new Error(`Faltan columnas obligatorias en la hoja "${nombreHoja}": ${faltantes.join(', ')}.`);
+
+  const avisos = [];
+  const datos = filas.filter((f) => f['Id'] !== null && String(f['Id']).trim() !== '').map((f) => evaluarFila(f, hoy, avisos));
+  datos.sort((a, b) =>
+    ORDEN_COLOR[a.color] - ORDEN_COLOR[b.color] ||
+    ORDEN_SEV[a.severidad] - ORDEN_SEV[b.severidad] ||
+    (a.diasRestantes ?? Infinity) - (b.diasRestantes ?? Infinity) ||
+    a.id.localeCompare(b.id));
+  return { hoja: nombreHoja, datos, avisos };
+}
+
+function resumir(datos, hoy) {
+  const porColor = { rojo: 0, amarillo: 0, verde: 0, gris: 0 };
+  datos.forEach((d) => porColor[d.color]++);
+  const activas = datos.filter((d) => d.color !== 'gris');
+  const penalidad = activas.filter((d) => d.diasRestantes !== null && d.diasRestantes <= CONFIG.ventanaPenalidadDias);
+  const ingreso = Object.fromEntries(ESTADOS_INGRESO.map((e) => [e, 0]));
+  datos.filter((d) => d.diaComentario === hoy && ESTADOS_INGRESO.includes(d.estado)).forEach((d) => ingreso[d.estado]++);
+  const canceladasHoy = datos.filter((d) => d.estado === 'Cancelado' && !d.canceladoSinMotivo && d.diaComentario === hoy).length;
+  return {
+    porColor, penalidad: penalidad.length,
+    vencidas: penalidad.filter((d) => d.diasRestantes < 0).length,
+    ingreso, canceladasHoy
+  };
+}
+
+// CSV con ";" (Excel en español) y protección contra inyección de fórmulas.
+function aCsv(datos) {
+  const celda = (v) => {
+    let s = String(v ?? '');
+    if (/^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = "'" + s;  // los números negativos quedan como números
+    return '"' + s.replace(/"/g, '""') + '"';
+  };
+  const enc = ['Semáforo', 'Motivo del color', 'Id', 'Nombre', 'Severidad', 'Estado', 'Asignado', 'Fecha estimada', 'Vencimiento del SLA', 'Días restantes', 'Último comentario'];
+  const lineas = datos.map((d) => [d.color.toUpperCase(), d.motivos.join(' | '), d.id, d.nombre, d.severidad, d.estado, d.asignado,
+    textoDesdeDia(d.fechaEst), textoDesdeDia(d.vencSla), d.diasRestantes ?? '', d.comentario].map(celda).join(';'));
+  return '﻿' + [enc.map(celda).join(';'), ...lineas].join('\r\n');
+}
+</script>
+
+<script id="ui">
+// =====================================================================================
+// INTERFAZ. Todo el contenido del Excel se inserta con textContent (nunca innerHTML).
+// =====================================================================================
+const $ = (id) => document.getElementById(id);
+const ICONO = { rojo: '● Rojo', amarillo: '▲ Amarillo', verde: '■ Verde', gris: '○ Gris' };
+const TITULO = { rojo: 'Actuar ya', amarillo: 'Atención', verde: 'Bajo control', gris: 'Fuera de penalidad' };
+let libroActual = null, nombreArchivo = '', datos = [], filtroColor = new Set(['rojo', 'amarillo', 'verde', 'gris']);
+
+function el(tag, props = {}, ...hijos) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else e.setAttribute(k, v);
+  }
+  hijos.flat().forEach((h) => e.append(h instanceof Node ? h : document.createTextNode(String(h))));
+  return e;
+}
+function mensaje(tipo, texto) { $('mensajes').append(el('div', { class: tipo, text: texto })); }
+function hoyLocal() { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DIA_MS; }
+function fechaRef() { return diaDesdeTexto($('fechaRef').value) ?? hoyLocal(); }
+
+$('fechaRef').value = textoDesdeDia(hoyLocal());
+$('leyendaSla').textContent = 'Plazos (SLA) desde la detección: ' +
+  Object.entries(CONFIG.slaDias).map(([s, d]) => `${s} ${d} días`).join(' · ') + '. Resurgente: el plazo se reinicia.';
+
+// ----- Carga del archivo -----
+const zona = $('zona');
+zona.addEventListener('click', () => $('archivo').click());
+zona.addEventListener('dragover', (e) => { e.preventDefault(); zona.classList.add('activa'); });
+zona.addEventListener('dragleave', () => zona.classList.remove('activa'));
+zona.addEventListener('drop', (e) => { e.preventDefault(); zona.classList.remove('activa'); if (e.dataTransfer.files[0]) cargar(e.dataTransfer.files[0]); });
+$('archivo').addEventListener('change', (e) => { if (e.target.files[0]) cargar(e.target.files[0]); e.target.value = ''; });
+$('fechaRef').addEventListener('change', () => { if (libroActual) procesar(); });
+
+async function cargar(archivo) {
+  $('mensajes').replaceChildren();
+  if (typeof XLSX === 'undefined') return mensaje('error', 'No se pudo cargar la librería de lectura de Excel (SheetJS). Revisá la conexión a Internet.');
+  if (!/\.xlsx$/i.test(archivo.name)) return mensaje('error', 'Solo se aceptan archivos .xlsx.');
+  if (archivo.size > CONFIG.maxBytes) return mensaje('error', 'El archivo supera el máximo de 10 MB.');
+  try {
+    const buffer = await archivo.arrayBuffer();
+    libroActual = XLSX.read(buffer, { type: 'array', cellDates: false, cellFormula: false, cellHTML: false, cellStyles: false });
+    nombreArchivo = archivo.name;
+    procesar();
+  } catch (err) {
+    libroActual = null;
+    mensaje('error', 'No se pudo leer el archivo: ' + err.message);
+  }
+}
+
+function procesar() {
+  $('mensajes').replaceChildren();
+  try {
+    const hoy = fechaRef();
+    const r = procesarLibro(libroActual, hoy);
+    datos = r.datos;
+    if (!nombreArchivo.startsWith('Reporte_Vulnerabilidades_Infra')) mensaje('aviso', `El archivo se llama "${nombreArchivo}" y no "Reporte_Vulnerabilidades_Infra.xlsx". Se procesa igual.`);
+    r.avisos.forEach((a) => mensaje('aviso', a));
+    mensaje('ok', `${datos.length} vulnerabilidades leídas de la hoja "${r.hoja}".`);
+    $('infoArchivo').textContent = nombreArchivo;
+    armarFiltros();
+    dibujarResumen(resumir(datos, hoy));
+    dibujarGrafico();
+    dibujarTabla();
+    $('resultado').classList.remove('oculto');
+  } catch (err) {
+    $('resultado').classList.add('oculto');
+    mensaje('error', err.message);
+  }
+}
+
+// ----- Resumen -----
+function dibujarResumen(r) {
+  $('tarjetas').replaceChildren(...['rojo', 'amarillo', 'verde', 'gris'].map((c) => {
+    const b = el('button', { class: `tarjeta t-${c}`, 'aria-pressed': String(filtroColor.has(c)), title: 'Clic para mostrar u ocultar en la tabla' },
+      el('div', { class: 'tit', text: `${ICONO[c]} · ${TITULO[c]}` }),
+      el('div', { class: 'num', text: r.porColor[c] }),
+      el('div', { class: 'sub', text: c === 'gris' ? 'Cerradas, riesgo aceptado y canceladas' : 'vulnerabilidades' }));
+    b.addEventListener('click', () => {
+      filtroColor.has(c) ? filtroColor.delete(c) : filtroColor.add(c);
+      b.setAttribute('aria-pressed', String(filtroColor.has(c)));
+      dibujarTabla();
+    });
+    return b;
+  }));
+  $('indicadores').replaceChildren(
+    el('div', { class: 'indicador' },
+      el('div', { class: 'sub', text: `Penalidades probables en los próximos ${CONFIG.ventanaPenalidadDias} días` }),
+      el('div', { class: 'num', text: r.penalidad }),
+      el('div', { class: 'sub', text: `${r.vencidas} con el SLA ya vencido` })),
+    el('div', { class: 'indicador' },
+      el('div', { class: 'sub', text: `Ingreso del día (${$('fechaRef').value})` }),
+      el('div', { class: 'pastillas' }, ...Object.entries(r.ingreso).map(([e, n]) => el('span', { class: 'pastilla', text: `${e}: ${n}` })))),
+    el('div', { class: 'indicador' },
+      el('div', { class: 'sub', text: 'Canceladas en el día' }),
+      el('div', { class: 'num', text: r.canceladasHoy })));
+}
+
+function dibujarGrafico() {
+  const equipos = {};
+  datos.forEach((d) => { (equipos[d.asignado] ??= { rojo: 0, amarillo: 0, verde: 0, gris: 0, total: 0 }); equipos[d.asignado][d.color]++; equipos[d.asignado].total++; });
+  const max = Math.max(1, ...Object.values(equipos).map((e) => e.total));
+  const filas = Object.entries(equipos).sort((a, b) => b[1].rojo - a[1].rojo || b[1].total - a[1].total).map(([nombre, e]) => {
+    const barra = el('div', { class: 'barra', role: 'img',
+      'aria-label': `${nombre}: ${e.rojo} rojo, ${e.amarillo} amarillo, ${e.verde} verde, ${e.gris} gris` });
+    ['rojo', 'amarillo', 'verde', 'gris'].forEach((c) => {
+      if (!e[c]) return;
+      const s = el('span', { class: `s-${c}`, title: `${ICONO[c]}: ${e[c]}` });
+      s.style.width = (e[c] / max * 100) + '%';
+      barra.append(s);
+    });
+    return el('div', { class: 'barra-fila' }, el('span', { class: 'nombre', title: nombre, text: nombre }), barra, el('span', { class: 'total-barra', text: e.total }));
+  });
+  $('grafico').replaceChildren(...filas);
+}
+
+// ----- Filtros y tabla -----
+function opciones(select, valores) {
+  const actual = select.value;
+  select.replaceChildren(el('option', { value: '', text: 'Todos' }), ...valores.map((v) => el('option', { value: v, text: v })));
+  if (valores.includes(actual)) select.value = actual;
+}
+function armarFiltros() {
+  opciones($('fSev'), Object.keys(CONFIG.slaDias));
+  opciones($('fEstado'), ESTADOS.filter((e) => datos.some((d) => d.estado === e)));
+  opciones($('fAsignado'), [...new Set(datos.map((d) => d.asignado))].sort());
+}
+['fSev', 'fEstado', 'fAsignado', 'fTexto'].forEach((id) => $(id).addEventListener('input', dibujarTabla));
+
+function visibles() {
+  const sev = $('fSev').value, est = $('fEstado').value, asi = $('fAsignado').value, txt = normalizar($('fTexto').value);
+  return datos.filter((d) => filtroColor.has(d.color) && (!sev || d.severidad === sev) && (!est || d.estado === est) &&
+    (!asi || d.asignado === asi) && (!txt || normalizar([d.id, d.nombre, d.descripcion, d.comentario, d.historico, d.asignado].join(' ')).includes(txt)));
+}
+
+function dibujarTabla() {
+  const filas = visibles();
+  $('contador').textContent = `${filas.length} de ${datos.length}`;
+  const cuerpo = [];
+  filas.forEach((d) => {
+    const textoDias = d.diasRestantes === null ? '—' : (d.diasRestantes < 0 ? `${d.diasRestantes} (vencido)` : String(d.diasRestantes));
+    const fila = el('tr', { class: 'fila', tabindex: '0', 'aria-expanded': 'false' },
+      el('td', {}, el('span', { class: `badge b-${d.color}`, text: ICONO[d.color] }), el('span', { class: 'motivo-color', text: d.motivos[0] })),
+      el('td', { text: d.id }),
+      el('td', { text: d.nombre }),
+      el('td', {}, el('span', { class: `sev sev-${d.severidad}`, text: d.severidad }), el('span', { class: 'deducida', text: d.claveSeveridad ? `clave: ${d.claveSeveridad}` : 'sin coincidencia' })),
+      el('td', { text: d.estado + (d.canceladoSinMotivo ? ' (sin motivo)' : '') }),
+      el('td', { text: d.asignado }),
+      el('td', { text: textoDesdeDia(d.fechaEst) }),
+      el('td', { text: textoDesdeDia(d.vencSla) }),
+      el('td', { class: d.diasRestantes !== null && d.diasRestantes < 0 && d.color !== 'gris' ? 'vencido' : '', text: textoDias }),
+      el('td', { text: d.comentario }));
+    const detalle = el('tr', { class: 'detalle oculto' },
+      el('td', { colspan: '10' }, el('div', { class: 'detalle-grid' },
+        el('div', {},
+          el('strong', { text: 'Descripción' }), el('p', { text: d.descripcion }),
+          el('strong', { text: 'Por qué tiene este color' }), el('ul', {}, ...d.motivos.map((m) => el('li', { text: m }))),
+          el('p', { class: 'sub', text: `Detección: ${textoDesdeDia(d.deteccion) || 'sin dato'} · SLA ${d.severidad}: ${CONFIG.slaDias[d.severidad]} días · Severidad deducida por: ${d.claveSeveridad ?? 'regla por defecto'}` })),
+        el('div', {}, el('strong', { text: 'Comentarios histórico' }), el('pre', { class: 'historico', text: d.historico || '(sin histórico)' })))));
+    const alternar = () => { detalle.classList.toggle('oculto'); fila.setAttribute('aria-expanded', String(!detalle.classList.contains('oculto'))); };
+    fila.addEventListener('click', alternar);
+    fila.addEventListener('keydown', (e) => { if (e.key === 'Enter') alternar(); });
+    cuerpo.push(fila, detalle);
+  });
+  $('cuerpo').replaceChildren(...cuerpo);
+}
+
+$('exportar').addEventListener('click', () => {
+  const blob = new Blob([aCsv(visibles())], { type: 'text/csv;charset=utf-8' });
+  const a = el('a', { href: URL.createObjectURL(blob), download: `Vulnerabilidades_Priorizadas_${$('fechaRef').value}.csv` });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+</script>
+</body>
+</html>
